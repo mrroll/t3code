@@ -1683,7 +1683,7 @@ describe("deriveMessagesTimelineRows", () => {
   });
 
   it("labels mixed-group overflow from the entries actually hidden", () => {
-    const rows = deriveMessagesTimelineRows({
+    const input = {
       timelineEntries: [
         {
           id: "tool-entry-1",
@@ -1724,11 +1724,22 @@ describe("deriveMessagesTimelineRows", () => {
       activeTurnStartedAt: null,
       turnDiffSummaryByAssistantMessageId: new Map(),
       revertTurnCountByUserMessageId: new Map(),
+    } satisfies Parameters<typeof deriveMessagesTimelineRows>[0];
+    const rows = deriveMessagesTimelineRows(input);
+    const expandedRows = deriveMessagesTimelineRows({
+      ...input,
+      expandedWorkGroupIds: new Set(["work-group:tool-entry-1"]),
     });
 
     expect(rows.find((row) => row.kind === "work-toggle")).toMatchObject({
       hiddenCount: 1,
       onlyToolEntries: true,
+    });
+    expect(expandedRows.at(-1)).toMatchObject({
+      kind: "work-toggle",
+      expanded: true,
+      onlyToolEntries: true,
+      summary: null,
     });
   });
 

@@ -915,7 +915,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
   const isExpandedToolGroupEntry = row.kind === "work" && row.isExpandedToolGroupEntry;
   const isLastExpandedToolGroupEntry = row.kind === "work" && row.isLastExpandedToolGroupEntry;
   const isExpandedToolGroupHeader =
-    (row.kind === "work-toggle" && row.onlyToolEntries && row.expanded) ||
+    (row.kind === "work-toggle" && row.summary !== null && row.onlyToolEntries && row.expanded) ||
     (row.kind === "work-live" && row.expanded);
 
   return (
