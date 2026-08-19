@@ -8,6 +8,7 @@ import type {
   ProviderOptionSelection,
   RuntimeMode,
   ServerProvider,
+  ServerProviderSkill,
 } from "@t3tools/contracts";
 import {
   CommandId,
@@ -59,7 +60,11 @@ import {
   capturePendingTaskEditorWriteBaseline,
   flushPendingTaskEditorWrite,
 } from "../../state/pending-task-editor-writes";
-import { useDebouncedValue, usePaginatedBranches } from "../../state/queries";
+import {
+  useDebouncedValue,
+  usePaginatedBranches,
+  useProjectProviderSkills,
+} from "../../state/queries";
 import { vcsEnvironment } from "../../state/vcs";
 import {
   flattenQueuedThreadMessages,
@@ -161,6 +166,7 @@ type NewTaskFlowContextValue = {
   readonly selectedModel: ModelSelection | null;
   readonly selectedModelOption: ModelOption | null;
   readonly selectedProviderStatus: ServerProvider | null;
+  readonly selectedProviderSkills: ReadonlyArray<ServerProviderSkill>;
   readonly providerGroups: ReadonlyArray<ProviderGroup>;
   readonly filteredBranches: ReadonlyArray<VcsRef>;
   readonly reset: () => void;
@@ -474,6 +480,18 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       ) ?? null,
     [selectedEnvironmentServerConfig, selectedModel?.instanceId],
   );
+  const projectProviderSkills = useProjectProviderSkills({
+    environmentId: selectedProject?.environmentId ?? null,
+    providerInstanceId: selectedModel?.instanceId ?? null,
+    scope:
+      selectedProject === null
+        ? null
+        : {
+            kind: "project",
+            projectId: selectedProject.id,
+          },
+  });
+  const selectedProviderSkills = projectProviderSkills.skills;
   const setSelectedModelKey = useCallback(
     // Options ride along in the same write: a follow-up setSelectedModelOptions
     // call would rebuild the selection from the stale pre-switch model.
@@ -1068,6 +1086,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       selectedModel,
       selectedModelOption,
       selectedProviderStatus,
+      selectedProviderSkills,
       providerGroups,
       filteredBranches,
       reset,
@@ -1130,6 +1149,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       selectedModelOption,
       selectedProjectDraftKey,
       selectedProviderStatus,
+      selectedProviderSkills,
       setSelectedModelOptions,
       selectedProject,
       selectedProjectKey,

@@ -1,7 +1,14 @@
 import type { VcsRefTarget } from "@t3tools/client-runtime/state/vcs";
+import {
+  makeProviderProjectSkillsInput,
+  type ProjectProviderSkillsScope,
+} from "@t3tools/client-runtime/state/projects";
 import type {
   EnvironmentId,
   OrchestrationThread,
+  ProjectId,
+  ProviderInstanceId,
+  ServerProviderSkill,
   ThreadId,
   VcsListRefsResult,
   VcsRef,
@@ -34,6 +41,7 @@ const COMPOSER_PATH_SEARCH_LIMIT = 20;
 const THREAD_SEARCH_DEBOUNCE_MS = 200;
 const VCS_REF_LIST_LIMIT = 100;
 const EMPTY_REFS: ReadonlyArray<VcsRef> = [];
+const EMPTY_PROVIDER_SKILLS: ReadonlyArray<ServerProviderSkill> = Object.freeze([]);
 const INITIAL_BRANCH_CURSORS = [undefined] as const;
 const EMPTY_THREAD_SEARCH_MATCHES: ReadonlyArray<EnvironmentThreadSearchMatch> = Object.freeze([]);
 const EMPTY_THREAD_SEARCH_ATOM = Atom.make({
@@ -134,6 +142,26 @@ export function useBranches(input: {
         })
       : null,
   );
+}
+
+export function useProjectProviderSkills(target: {
+  readonly environmentId: EnvironmentId | null;
+  readonly providerInstanceId: ProviderInstanceId | null;
+  readonly scope: ProjectProviderSkillsScope | null;
+}) {
+  const result = useEnvironmentQuery(
+    target.environmentId !== null && target.providerInstanceId !== null && target.scope !== null
+      ? projectEnvironment.providerSkills({
+          environmentId: target.environmentId,
+          input: makeProviderProjectSkillsInput(target.providerInstanceId, target.scope),
+        })
+      : null,
+  );
+  return {
+    skills: result.data?.skills ?? EMPTY_PROVIDER_SKILLS,
+    error: result.error,
+    isPending: result.isPending,
+  };
 }
 
 export function usePaginatedBranches(target: VcsRefTarget) {

@@ -156,6 +156,20 @@ export class ProviderDriverError extends Schema.TaggedErrorClass<ProviderDriverE
   }
 }
 
+export class ProviderProjectSkillsError extends Schema.TaggedErrorClass<ProviderProjectSkillsError>()(
+  "ProviderProjectSkillsError",
+  {
+    driver: Schema.String,
+    instanceId: Schema.String,
+    cwd: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {
+  override get message(): string {
+    return `Provider driver '${this.driver}' failed to list project skills for instance '${this.instanceId}' in '${this.cwd}'.`;
+  }
+}
+
 /**
  * ProviderSessionNotFoundError - Provider-facing session not found.
  */

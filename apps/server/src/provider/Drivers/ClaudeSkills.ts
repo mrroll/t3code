@@ -17,6 +17,7 @@ import type { ClaudeSettings, ServerProviderSkill } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import * as Types from "effect/Types";
 import { parse as parseYamlDocument } from "yaml";
 
 import { expandHomePath } from "../../pathExpansion.ts";
@@ -24,6 +25,7 @@ import { expandHomePath } from "../../pathExpansion.ts";
 type ClaudeSkillScope = "user" | "project";
 
 const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
+const SKILL_FILE_READ_CONCURRENCY = 8;
 
 type SkillFrontmatter =
   | { readonly kind: "missing" }
@@ -111,44 +113,61 @@ export const discoverClaudeSkills = Effect.fn("discoverClaudeSkills")(function* 
       : []),
   ];
 
+  const entriesByRoot = yield* Effect.forEach(
+    roots,
+    (root) =>
+      fileSystem
+        .readDirectory(root.directory)
+        .pipe(Effect.orElseSucceed((): ReadonlyArray<string> => [])),
+    { concurrency: "unbounded" },
+  );
+  const skillFiles = roots.flatMap((root, index) =>
+    [...(entriesByRoot[index] ?? [])].sort().map((entry) => ({
+      entry,
+      root,
+      skillPath: path.join(root.directory, entry, "SKILL.md"),
+    })),
+  );
+  const loadedSkillFiles = yield* Effect.forEach(
+    skillFiles,
+    (skillFile) =>
+      fileSystem.readFileString(skillFile.skillPath).pipe(
+        Effect.orElseSucceed(() => undefined),
+        Effect.map((contents) => ({
+          ...skillFile,
+          frontmatter: contents === undefined ? undefined : parseSkillFrontmatter(contents),
+        })),
+      ),
+    { concurrency: SKILL_FILE_READ_CONCURRENCY },
+  );
+
   const skillsByName = new Map<string, ServerProviderSkill>();
-  for (const root of roots) {
-    const entries = yield* fileSystem
-      .readDirectory(root.directory)
-      .pipe(Effect.orElseSucceed((): ReadonlyArray<string> => []));
-
-    for (const entry of [...entries].sort()) {
-      const skillPath = path.join(root.directory, entry, "SKILL.md");
-      const contents = yield* fileSystem
-        .readFileString(skillPath)
-        .pipe(Effect.orElseSucceed(() => undefined));
-      if (contents === undefined) {
-        continue;
-      }
-
-      const frontmatter = parseSkillFrontmatter(contents);
-      // Malformed frontmatter means the skill won't load in Claude Code
-      // either — skip it rather than surfacing a broken entry under its
-      // directory name.
-      if (frontmatter.kind === "malformed") {
-        continue;
-      }
-
-      const name = (frontmatter.kind === "parsed" ? frontmatter.name : undefined) ?? entry.trim();
-      if (!name) {
-        continue;
-      }
-
-      skillsByName.set(name, {
-        name,
-        path: skillPath,
-        enabled: true,
-        scope: root.scope,
-        ...(frontmatter.kind === "parsed" && frontmatter.description
-          ? { description: frontmatter.description }
-          : {}),
-      });
+  for (const { frontmatter, entry, root, skillPath } of loadedSkillFiles) {
+    if (frontmatter === undefined) {
+      continue;
     }
+    // Malformed frontmatter means the skill won't load in Claude Code
+    // either — skip it rather than surfacing a broken entry under its
+    // directory name.
+    if (frontmatter.kind === "malformed") {
+      continue;
+    }
+
+    const name = (frontmatter.kind === "parsed" ? frontmatter.name : undefined) ?? entry.trim();
+    if (!name) {
+      continue;
+    }
+
+    const skill: Types.Mutable<ServerProviderSkill> = {
+      name,
+      path: skillPath,
+      enabled: true,
+      scope: root.scope,
+    };
+    if (frontmatter.kind === "parsed" && frontmatter.description) {
+      skill.description = frontmatter.description;
+    }
+    skillsByName.set(name, skill);
   }
 
   return [...skillsByName.values()].sort((left, right) => left.name.localeCompare(right.name));

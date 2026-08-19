@@ -61,6 +61,7 @@ import { buildModelOptions, groupByProvider } from "../../lib/modelOptions";
 import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import type { RemoteClientConnectionState } from "../../lib/connection";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
+import { useProjectProviderSkills } from "../../state/queries";
 import { ComposerCommandPopover } from "./ComposerCommandPopover";
 import { useComposerCommandMenu } from "./use-composer-command-menu";
 import {
@@ -337,6 +338,16 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     );
   }, [props.serverConfig, props.selectedThread.modelSelection.instanceId]);
   const composerOwnerKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
+  const projectProviderSkills = useProjectProviderSkills({
+    environmentId: props.environmentId,
+    providerInstanceId: props.selectedThread.modelSelection.instanceId,
+    scope: {
+      kind: "thread",
+      projectId: props.selectedThread.projectId,
+      threadId: props.selectedThread.id,
+    },
+  });
+  const selectedProviderSkills = projectProviderSkills.skills;
 
   const composerMenu = useComposerCommandMenu({
     draftMessage: props.draftMessage,
@@ -344,6 +355,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     environmentId: props.environmentId,
     projectCwd: props.projectCwd,
     selectedProviderStatus,
+    selectedProviderSkills,
     hasThread: true,
     onChangeDraftMessage: props.onChangeDraftMessage,
     onUpdateInteractionMode: props.onUpdateInteractionMode,
@@ -610,7 +622,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                 multiline
                 value={props.draftMessage}
                 readOnly={voiceInput.freezesEditor}
-                skills={selectedProviderStatus?.skills ?? []}
+                skills={selectedProviderSkills}
                 selection={composerMenu.selection}
                 onChangeText={props.onChangeDraftMessage}
                 onSelectionChange={composerMenu.onSelectionChange}

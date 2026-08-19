@@ -96,6 +96,31 @@ export const ServerProviderSkill = Schema.Struct({
 });
 export type ServerProviderSkill = typeof ServerProviderSkill.Type;
 
+export const ServerProviderProjectSkillsInput = Schema.Struct({
+  providerInstanceId: ProviderInstanceId,
+  projectId: ProjectId,
+  threadId: Schema.optionalKey(ThreadId),
+});
+export type ServerProviderProjectSkillsInput = typeof ServerProviderProjectSkillsInput.Type;
+
+export const ServerProviderProjectSkillsResult = Schema.Struct({
+  skills: Schema.Array(ServerProviderSkill),
+});
+export type ServerProviderProjectSkillsResult = typeof ServerProviderProjectSkillsResult.Type;
+
+export class ServerProviderProjectSkillsError extends Schema.TaggedErrorClass<ServerProviderProjectSkillsError>()(
+  "ServerProviderProjectSkillsError",
+  {
+    providerInstanceId: ProviderInstanceId,
+    projectId: ProjectId,
+    threadId: Schema.optionalKey(ThreadId),
+  },
+) {
+  override get message(): string {
+    return `Failed to load project skills for provider '${this.providerInstanceId}' and project '${this.projectId}'.`;
+  }
+}
+
 /**
  * Availability of a configured provider instance from the runtime's POV.
  *

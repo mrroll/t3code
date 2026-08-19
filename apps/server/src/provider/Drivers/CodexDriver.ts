@@ -22,11 +22,15 @@
  * @module provider/Drivers/CodexDriver
  */
 import { CodexSettings, ProviderDriverKind, type ServerProvider } from "@t3tools/contracts";
+import * as Cache from "effect/Cache";
 import * as Crypto from "effect/Crypto";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import { HttpClient } from "effect/unstable/http";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
@@ -34,9 +38,13 @@ import { makeCodexTextGeneration } from "../../textGeneration/CodexTextGeneratio
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
-import { ProviderDriverError } from "../Errors.ts";
+import { ProviderDriverError, ProviderProjectSkillsError } from "../Errors.ts";
 import { makeCodexAdapter } from "../Layers/CodexAdapter.ts";
-import { checkCodexProviderStatus, makePendingCodexProvider } from "../Layers/CodexProvider.ts";
+import {
+  checkCodexProviderStatus,
+  listCodexProjectSkills,
+  makePendingCodexProvider,
+} from "../Layers/CodexProvider.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import * as ModelManifest from "../ModelManifest.ts";
@@ -61,6 +69,10 @@ import {
 const decodeCodexSettings = Schema.decodeSync(CodexSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("codex");
+const PROJECT_SKILLS_CACHE_CAPACITY = 32;
+const PROJECT_SKILLS_CACHE_TTL = Duration.seconds(30);
+const PROJECT_SKILLS_PROBE_TIMEOUT = Duration.seconds(8);
+const PROJECT_SKILLS_PROBE_CONCURRENCY = 2;
 const UPDATE = makePackageManagedProviderMaintenanceResolver({
   provider: DRIVER_KIND,
   npmPackageName: "@openai/codex",
@@ -118,6 +130,7 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
   create: ({ instanceId, displayName, accentColor, environment, enabled, config }) =>
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const fileSystem = yield* FileSystem.FileSystem;
       const httpClient = yield* HttpClient.HttpClient;
       const serverSettings = yield* ServerSettingsService;
       const eventLoggers = yield* ProviderEventLoggers;
@@ -164,6 +177,28 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
         ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
       });
       const textGeneration = yield* makeCodexTextGeneration(effectiveConfig, processEnv);
+      const projectSkillsSemaphore = yield* Semaphore.make(PROJECT_SKILLS_PROBE_CONCURRENCY);
+      const projectSkillsCache = yield* Cache.makeWith(
+        (cwd: string) =>
+          projectSkillsSemaphore
+            .withPermits(1)(
+              listCodexProjectSkills({
+                binaryPath: effectiveConfig.binaryPath,
+                homePath: effectiveConfig.homePath,
+                launchArgs: effectiveConfig.launchArgs,
+                cwd,
+                environment: processEnv,
+              }).pipe(
+                Effect.scoped,
+                Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+              ),
+            )
+            .pipe(Effect.timeout(PROJECT_SKILLS_PROBE_TIMEOUT)),
+        {
+          capacity: PROJECT_SKILLS_CACHE_CAPACITY,
+          timeToLive: (exit) => (Exit.isSuccess(exit) ? PROJECT_SKILLS_CACHE_TTL : Duration.zero),
+        },
+      );
 
       // Build a managed snapshot whose settings never change — mutations come
       // in as instance rebuilds from the registry rather than in-place
@@ -227,6 +262,21 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
         snapshot,
         adapter,
         textGeneration,
+        projectSkills: {
+          list: (cwd) =>
+            fileSystem.realPath(cwd).pipe(
+              Effect.flatMap((resolvedCwd) => Cache.get(projectSkillsCache, resolvedCwd)),
+              Effect.mapError(
+                (cause) =>
+                  new ProviderProjectSkillsError({
+                    driver: DRIVER_KIND,
+                    instanceId,
+                    cwd,
+                    cause,
+                  }),
+              ),
+            ),
+        },
       } satisfies ProviderInstance;
     }),
 };

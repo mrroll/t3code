@@ -24,6 +24,7 @@
  */
 import {
   defaultInstanceIdForDriver,
+  isProviderAvailable,
   ProviderDriverKind,
   type ProviderInstanceId,
   type ServerProvider,
@@ -510,6 +511,37 @@ export const ProviderRegistryLive = Layer.effect(
       return yield* refreshOneSource(providerSource);
     });
 
+    const listProjectSkills: ProviderRegistryShape["listProjectSkills"] = (input) =>
+      Effect.gen(function* () {
+        const emptyResult = {
+          skills: [],
+        };
+        const instance = (yield* Ref.get(liveSubsRef)).get(input.providerInstanceId);
+        const providerSnapshot = (yield* Ref.get(providersRef)).find(
+          (provider) => provider.instanceId === input.providerInstanceId,
+        );
+        if (
+          !instance ||
+          !instance.enabled ||
+          providerSnapshot === undefined ||
+          providerSnapshot.enabled === false ||
+          providerSnapshot.installed === false ||
+          !isProviderAvailable(providerSnapshot) ||
+          providerSnapshot.status !== "ready"
+        ) {
+          return emptyResult;
+        }
+        if (instance.projectSkills === undefined) {
+          return {
+            skills: providerSnapshot.skills,
+          };
+        }
+        const skills = yield* instance.projectSkills.list(input.cwd);
+        return {
+          skills,
+        };
+      });
+
     const getProviderMaintenanceCapabilitiesForInstance = Effect.fn(
       "getProviderMaintenanceCapabilitiesForInstance",
     )(function* (instanceId: ProviderInstanceId, provider: ProviderDriverKind) {
@@ -724,6 +756,7 @@ export const ProviderRegistryLive = Layer.effect(
         refresh(provider).pipe(Effect.catchCause(recoverRefreshFailure)),
       refreshInstance: (instanceId: ProviderInstanceId) =>
         refreshInstance(instanceId).pipe(Effect.catchCause(recoverRefreshFailure)),
+      listProjectSkills,
       getProviderMaintenanceCapabilitiesForInstance,
       setProviderMaintenanceActionState,
       get streamChanges() {
