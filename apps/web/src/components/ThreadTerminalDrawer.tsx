@@ -1420,6 +1420,11 @@ export default function ThreadTerminalDrawer({
   }, [threadRef.environmentId, threadRef.threadId]);
 
   useEffect(() => {
+    if (!renamingTerminalId || normalizedTerminalIds.includes(renamingTerminalId)) return;
+    cancelTerminalRename();
+  }, [cancelTerminalRename, normalizedTerminalIds, renamingTerminalId]);
+
+  useEffect(() => {
     onHeightChangeRef.current = onHeightChange;
   }, [onHeightChange]);
 
