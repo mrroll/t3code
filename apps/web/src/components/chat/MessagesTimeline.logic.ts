@@ -332,8 +332,9 @@ function toolGroupActionLabel(action: ToolGroupAction, count: number): string {
 
 /** Immediate, provider-neutral fallback while generated tool summaries are disabled or unavailable. */
 export function summarizeToolGroup(entries: ReadonlyArray<WorkLogEntry>): string {
+  const summaryEntries = toolGroupSummaryEntries(entries);
   const groupedEntries = new Map<ToolGroupAction, WorkLogEntry[]>();
-  for (const entry of entries) {
+  for (const entry of summaryEntries) {
     const action = toolGroupAction(entry);
     const group = groupedEntries.get(action);
     if (group) group.push(entry);
@@ -350,8 +351,20 @@ export function summarizeToolGroup(entries: ReadonlyArray<WorkLogEntry>): string
   return `${sentenceLabels.slice(0, -1).join(", ")}, and ${sentenceLabels.at(-1)}`;
 }
 
+function toolGroupSummaryEntries(
+  entries: ReadonlyArray<WorkLogEntry>,
+): ReadonlyArray<WorkLogEntry> {
+  const terminalEntries = entries.filter(
+    (entry) =>
+      (entry.sourceActivityKind !== "tool.started" &&
+        entry.sourceActivityKind !== "tool.updated") ||
+      (entry.toolLifecycleStatus !== undefined && entry.toolLifecycleStatus !== "inProgress"),
+  );
+  return terminalEntries.length > 0 ? terminalEntries : entries;
+}
+
 function toolGroupSummaryKind(entries: ReadonlyArray<WorkLogEntry>): ToolGroupSummaryKind {
-  const actions = new Set(entries.map(toolGroupAction));
+  const actions = new Set(toolGroupSummaryEntries(entries).map(toolGroupAction));
   if (actions.size !== 1) return "mixed";
 
   const action = actions.values().next().value!;

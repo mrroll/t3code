@@ -261,6 +261,30 @@ describe("summarizeToolGroup", () => {
       ]),
     ).toBe("Read 1 file");
   });
+
+  it("counts id-less lifecycle markers as one completed tool", () => {
+    expect(
+      summarizeToolGroup([
+        {
+          id: "legacy-update",
+          createdAt: "2026-01-01T00:00:00Z",
+          label: "Glob",
+          tone: "tool",
+          itemType: "mcp_tool_call",
+          sourceActivityKind: "tool.updated",
+        },
+        {
+          id: "legacy-complete",
+          createdAt: "2026-01-01T00:00:01Z",
+          label: "Glob",
+          tone: "tool",
+          itemType: "mcp_tool_call",
+          sourceActivityKind: "tool.completed",
+          toolLifecycleStatus: "completed",
+        },
+      ]),
+    ).toBe("Used 1 tool");
+  });
 });
 
 describe("resolveAssistantMessageCopyState", () => {

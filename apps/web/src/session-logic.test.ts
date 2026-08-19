@@ -1231,6 +1231,50 @@ describe("deriveWorkLogEntries", () => {
     expect(entry?.toolLifecycleStatus).toBe("completed");
   });
 
+  it("does not leave id-less tool lifecycles running", () => {
+    const entries = deriveWorkLogEntries([
+      makeActivity({
+        id: "legacy-tool-start",
+        createdAt: "2026-02-23T00:00:01.000Z",
+        kind: "tool.started",
+        summary: "Glob",
+        tone: "tool",
+        payload: {
+          itemType: "mcp_tool_call",
+          detail: "Searching",
+        },
+      }),
+      makeActivity({
+        id: "legacy-tool-update",
+        createdAt: "2026-02-23T00:00:02.000Z",
+        kind: "tool.updated",
+        summary: "Glob",
+        tone: "tool",
+        payload: {
+          itemType: "mcp_tool_call",
+          detail: "Still searching",
+        },
+      }),
+      makeActivity({
+        id: "legacy-tool-complete",
+        createdAt: "2026-02-23T00:00:03.000Z",
+        kind: "tool.completed",
+        summary: "Glob",
+        tone: "tool",
+        payload: {
+          itemType: "mcp_tool_call",
+          detail: "Found 3 files",
+        },
+      }),
+    ]);
+
+    expect(entries.map((entry) => entry.id)).toEqual([
+      "legacy-tool-update",
+      "legacy-tool-complete",
+    ]);
+    expect(entries.map((entry) => entry.toolLifecycleStatus)).toEqual([undefined, "completed"]);
+  });
+
   it("preserves MCP server, tool, arguments, and results for expanded display", () => {
     const item = {
       type: "mcpToolCall",

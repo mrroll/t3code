@@ -756,6 +756,7 @@ export function deriveWorkLogEntries(
     if (activity.summary === "Checkpoint captured") continue;
     if (isPlanBoundaryToolActivity(activity)) continue;
     if (isCodexTerminalInteractionActivity(activity)) continue;
+    if (isUnkeyedStatuslessToolStart(activity)) continue;
     if (isAgentInternalActivity(activity)) continue;
     entries.push(toDerivedWorkLogEntry(activity));
   }
@@ -820,6 +821,17 @@ function extractWorkLogToolLifecycleStatus(
     return s;
   }
   return undefined;
+}
+
+function isUnkeyedStatuslessToolStart(activity: OrchestrationThreadActivity): boolean {
+  if (activity.kind !== "tool.started") {
+    return false;
+  }
+  const payload = asRecord(activity.payload);
+  if (extractToolCallId(payload)) {
+    return false;
+  }
+  return extractWorkLogToolLifecycleStatus(payload) === undefined;
 }
 
 function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWorkLogEntry {
@@ -901,7 +913,7 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
     entry.toolCallId = toolCallId;
   }
   let toolLifecycleStatus = extractWorkLogToolLifecycleStatus(payload);
-  if (!toolLifecycleStatus && activity.kind === "tool.started") {
+  if (!toolLifecycleStatus && toolCallId && activity.kind === "tool.started") {
     toolLifecycleStatus = "inProgress";
   }
   if (!toolLifecycleStatus && activity.kind === "tool.completed") {
