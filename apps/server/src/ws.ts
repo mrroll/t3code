@@ -43,6 +43,7 @@ import {
   RelayClientInstallFailedError,
   type RelayClientInstallProgressEvent,
   type ServerSelfUpdateError,
+  ServerProviderProjectSkillsError,
   type ServerSelfUpdateProgressEvent,
   type FilesystemBrowseFailure,
   FilesystemBrowseError,
@@ -1834,6 +1835,39 @@ const makeWsRpcLayer = (
               ),
             ),
             { "rpc.aggregate": "workspace" },
+          ),
+        [WS_METHODS.providersProjectSkills]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.providersProjectSkills,
+            Effect.gen(function* () {
+              const project = yield* projectionSnapshotQuery.getProjectShellById(input.projectId);
+              if (Option.isNone(project)) {
+                return yield* new ServerProviderProjectSkillsError(input);
+              }
+
+              if (input.threadId === undefined) {
+                return yield* providerRegistry.listProjectSkills({
+                  providerInstanceId: input.providerInstanceId,
+                  cwd: project.value.workspaceRoot,
+                });
+              }
+
+              const thread = yield* projectionSnapshotQuery.getThreadShellById(input.threadId);
+              if (Option.isNone(thread) || thread.value.projectId !== input.projectId) {
+                return yield* new ServerProviderProjectSkillsError(input);
+              }
+
+              return yield* providerRegistry.listProjectSkills({
+                providerInstanceId: input.providerInstanceId,
+                cwd: thread.value.worktreePath ?? project.value.workspaceRoot,
+              });
+            }).pipe(
+              Effect.tapError((cause) =>
+                Effect.logWarning("provider project skills probe failed", { cause }),
+              ),
+              Effect.mapError(() => new ServerProviderProjectSkillsError(input)),
+            ),
+            { "rpc.aggregate": "server" },
           ),
         [WS_METHODS.shellOpenInEditor]: (input) =>
           observeRpcEffect(WS_METHODS.shellOpenInEditor, externalLauncher.launchEditor(input), {

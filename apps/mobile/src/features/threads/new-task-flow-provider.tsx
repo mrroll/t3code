@@ -51,7 +51,11 @@ import {
   updateComposerDraftSettings,
   useComposerDraft,
 } from "../../state/use-composer-drafts";
-import { useDebouncedValue, usePaginatedBranches } from "../../state/queries";
+import {
+  useDebouncedValue,
+  usePaginatedBranches,
+  useProjectProviderSkills,
+} from "../../state/queries";
 import { vcsEnvironment } from "../../state/vcs";
 import {
   flattenQueuedThreadMessages,
@@ -444,13 +448,18 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
         option.selection.instanceId === selectedModel.instanceId &&
         option.selection.model === selectedModel.model,
     ) ?? null;
-  const selectedProviderSkills = useMemo(
-    () =>
-      selectedEnvironmentServerConfig?.providers.find(
-        (provider) => provider.instanceId === selectedModel?.instanceId,
-      )?.skills ?? [],
-    [selectedEnvironmentServerConfig, selectedModel?.instanceId],
-  );
+  const projectProviderSkills = useProjectProviderSkills({
+    environmentId: selectedProject?.environmentId ?? null,
+    providerInstanceId: selectedModel?.instanceId ?? null,
+    scope:
+      selectedProject === null
+        ? null
+        : {
+            kind: "project",
+            projectId: selectedProject.id,
+          },
+  });
+  const selectedProviderSkills = projectProviderSkills.skills;
   const setSelectedModelKey = useCallback(
     // Options ride along in the same write: a follow-up setSelectedModelOptions
     // call would rebuild the selection from the stale pre-switch model.

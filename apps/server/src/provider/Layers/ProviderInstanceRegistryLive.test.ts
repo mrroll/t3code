@@ -16,11 +16,10 @@
  *     across every provider — any driver plugs into the registry through
  *     the same `ProviderDriver` value contract.
  *
- * Every instance in these tests is configured with `enabled: false` so the
- * provider-status checks short-circuit to pending/disabled snapshots
- * without trying to spawn real `codex` / `claude` / `agent` / `grok` / `opencode`
- * binaries. That keeps the assertions focused on registry routing
- * behaviour rather than the runtime details of each provider.
+ * Registry instances in these tests are configured with `enabled: false` so
+ * provider-status checks short-circuit to pending/disabled snapshots. The
+ * Project-skills boundary tests verify that Codex and Claude resolve the
+ * requested workspace before they discover repository skills.
  */
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -36,7 +35,9 @@ import {
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as Stream from "effect/Stream";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 
@@ -133,7 +134,7 @@ const makeOpenCodeConfig = (overrides: Partial<OpenCodeSettings>): OpenCodeSetti
   ...overrides,
 });
 
-describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
+describe("ProviderInstanceRegistryLive — provider instance slice", () => {
   // `ServerConfig.layerTest` needs `FileSystem` to materialize its scratch
   // directory. `Layer.merge` just unions requirements, so we have to push
   // `NodeServices.layer` through `Layer.provideMerge` to satisfy that
@@ -147,6 +148,138 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
     Layer.provideMerge(ServerSettingsService.layerTest()),
     Layer.provideMerge(TestHttpClientLive),
     Layer.provideMerge(Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers)),
+  );
+
+  it.live("resolves a project symlink before requesting Codex skills", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const temporaryDirectory = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-codex-project-skills-",
+      });
+      const executablePath = path.join(temporaryDirectory, "fake-codex.mjs");
+      const projectDirectory = path.join(temporaryDirectory, "project");
+      const missingProjectDirectory = path.join(temporaryDirectory, "project-missing");
+      const projectSymlink = path.join(temporaryDirectory, "project-link");
+      yield* fileSystem.makeDirectory(projectDirectory, { recursive: true });
+      yield* fileSystem.makeDirectory(missingProjectDirectory, { recursive: true });
+      yield* fileSystem.symlink(projectDirectory, projectSymlink);
+      yield* fileSystem.writeFileString(
+        executablePath,
+        [
+          "#!/usr/bin/env node",
+          'import { createInterface } from "node:readline";',
+          "const respond = (identifier, result) => {",
+          "  process.stdout.write(`${JSON.stringify({ id: identifier, result })}\\n`);",
+          "};",
+          "const lines = createInterface({ input: process.stdin });",
+          'lines.on("line", (line) => {',
+          "  const message = JSON.parse(line);",
+          '  if (message.method === "initialize") {',
+          "    respond(message.id, {",
+          '      userAgent: "mock-codex-app-server/0.0.0",',
+          "      codexHome: process.cwd(),",
+          '      platformFamily: "unix",',
+          '      platformOs: "macos",',
+          "    });",
+          "    return;",
+          "  }",
+          '  if (message.method !== "skills/list") {',
+          "    return;",
+          "  }",
+          "  const requestedCwd = message.params?.cwds?.[0];",
+          '  const hasMatchingEntry = !requestedCwd.endsWith("project-missing");',
+          "  respond(message.id, {",
+          "    data: [{",
+          "      cwd: `${requestedCwd}-other`,",
+          "      errors: [],",
+          "      skills: [{",
+          '        description: "Other project skill",',
+          "        enabled: true,",
+          '        name: "other-project-skill",',
+          "        path: `${requestedCwd}-other/.agents/skills/other-project-skill/SKILL.md`,",
+          '        scope: "repo",',
+          "      }],",
+          "    }, ...(hasMatchingEntry ? [{",
+          "      cwd: requestedCwd,",
+          "      errors: [],",
+          "      skills: [{",
+          '        description: "Project skill",',
+          "        enabled: true,",
+          '        name: "project-skill",',
+          "        path: `${requestedCwd}/.agents/skills/project-skill/SKILL.md`,",
+          '        scope: "repo",',
+          "      }],",
+          "    }] : [])],",
+          "  });",
+          "});",
+          "",
+        ].join("\n"),
+      );
+      yield* fileSystem.chmod(executablePath, 0o755);
+
+      const instance = yield* CodexDriver.create({
+        instanceId: ProviderInstanceId.make("codex_project_skills"),
+        displayName: "Codex",
+        environment: [],
+        enabled: true,
+        config: makeCodexConfig({
+          binaryPath: executablePath,
+          enabled: true,
+        }),
+      });
+      if (instance.projectSkills === undefined) {
+        return yield* Effect.die(new Error("CODEX_PROJECT_SKILLS_MISSING"));
+      }
+
+      const skills = yield* instance.projectSkills.list(projectSymlink);
+      const resolvedProjectDirectory = yield* fileSystem.realPath(projectDirectory);
+      expect(skills.map((skill) => skill.name)).toEqual(["project-skill"]);
+      expect(skills[0]?.path).toBe(
+        path.join(resolvedProjectDirectory, ".agents/skills/project-skill/SKILL.md"),
+      );
+      expect(yield* instance.projectSkills.list(missingProjectDirectory)).toEqual([]);
+    }).pipe(Effect.scoped, Effect.provide(testLayer)),
+  );
+
+  it.live("resolves a project symlink before discovering Claude skills", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const temporaryDirectory = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-claude-project-skills-",
+      });
+      const configDirectory = path.join(temporaryDirectory, "claude-config");
+      const projectDirectory = path.join(temporaryDirectory, "project");
+      const projectSymlink = path.join(temporaryDirectory, "project-link");
+      const skillDirectory = path.join(projectDirectory, ".agents", "skills", "project-skill");
+      yield* fileSystem.makeDirectory(configDirectory, { recursive: true });
+      yield* fileSystem.makeDirectory(skillDirectory, { recursive: true });
+      yield* fileSystem.writeFileString(
+        path.join(skillDirectory, "SKILL.md"),
+        ["---", "name: project-skill", "description: Project skill", "---", ""].join("\n"),
+      );
+      yield* fileSystem.symlink(projectDirectory, projectSymlink);
+
+      const instance = yield* ClaudeDriver.create({
+        instanceId: ProviderInstanceId.make("claude_project_skills"),
+        displayName: "Claude",
+        environment: [],
+        enabled: false,
+        config: makeClaudeConfig({ homePath: configDirectory }),
+      });
+      if (instance.projectSkills === undefined) {
+        return yield* Effect.die(new Error("CLAUDE_PROJECT_SKILLS_MISSING"));
+      }
+
+      const skills = yield* instance.projectSkills.list(projectSymlink);
+      const resolvedProjectDirectory = yield* fileSystem.realPath(projectDirectory);
+      expect(skills.map((skill) => skill.name)).toEqual(["project-skill"]);
+      expect(skills[0]?.path).toBe(
+        path.join(resolvedProjectDirectory, ".agents/skills/project-skill/SKILL.md"),
+      );
+      expect(skills[0]?.scope).toBe("project");
+    }).pipe(Effect.scoped, Effect.provide(testLayer)),
   );
 
   it.live("boots two independent codex instances from a ProviderInstanceConfigMap", () =>

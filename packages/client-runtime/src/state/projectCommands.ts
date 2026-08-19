@@ -1,4 +1,12 @@
-import { type EnvironmentId, type ProjectReadFileResult, WS_METHODS } from "@t3tools/contracts";
+import {
+  type EnvironmentId,
+  type ProjectId,
+  type ProjectReadFileResult,
+  type ProviderInstanceId,
+  type ServerProviderProjectSkillsInput,
+  type ThreadId,
+  WS_METHODS,
+} from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import { Atom } from "effect/unstable/reactivity";
 
@@ -35,6 +43,24 @@ export interface OptimisticProjectFileTarget {
   readonly relativePath: string;
 }
 
+export type ProjectProviderSkillsScope =
+  | { readonly kind: "project"; readonly projectId: ProjectId }
+  | { readonly kind: "thread"; readonly projectId: ProjectId; readonly threadId: ThreadId };
+
+export const makeProviderProjectSkillsInput = (
+  providerInstanceId: ProviderInstanceId,
+  scope: ProjectProviderSkillsScope,
+): ServerProviderProjectSkillsInput => {
+  if (scope.kind === "project") {
+    return { providerInstanceId, projectId: scope.projectId };
+  }
+  return {
+    providerInstanceId,
+    projectId: scope.projectId,
+    threadId: scope.threadId,
+  };
+};
+
 function optimisticProjectFileKey(target: OptimisticProjectFileTarget): string {
   return JSON.stringify([target.environmentId, target.cwd, target.relativePath]);
 }
@@ -69,6 +95,12 @@ export function createProjectEnvironmentAtoms<R, E>(
     readFile: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:projects:read-file",
       tag: WS_METHODS.projectsReadFile,
+      staleTimeMs: 30_000,
+      idleTtlMs: 5 * 60_000,
+    }),
+    providerSkills: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:providers:project-skills",
+      tag: WS_METHODS.providersProjectSkills,
       staleTimeMs: 30_000,
       idleTtlMs: 5 * 60_000,
     }),

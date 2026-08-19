@@ -27,7 +27,7 @@ import { makeClaudeTextGeneration } from "../../textGeneration/ClaudeTextGenerat
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
-import { ProviderDriverError } from "../Errors.ts";
+import { ProviderDriverError, ProviderProjectSkillsError } from "../Errors.ts";
 import { makeClaudeAdapter } from "../Layers/ClaudeAdapter.ts";
 import {
   checkClaudeProviderStatus,
@@ -55,6 +55,7 @@ import {
   type ProviderSnapshotSettings,
 } from "../providerUpdateSettings.ts";
 import { makeClaudeCapabilitiesCacheKey, makeClaudeContinuationGroupKey } from "./ClaudeHome.ts";
+import { discoverClaudeSkills } from "./ClaudeSkills.ts";
 const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("claudeAgent");
@@ -216,6 +217,26 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         snapshot,
         adapter,
         textGeneration,
+        projectSkills: {
+          list: (projectCwd) =>
+            fileSystem.realPath(projectCwd).pipe(
+              Effect.flatMap((resolvedProjectCwd) =>
+                discoverClaudeSkills(effectiveConfig, resolvedProjectCwd, processEnv).pipe(
+                  Effect.provideService(FileSystem.FileSystem, fileSystem),
+                  Effect.provideService(Path.Path, path),
+                ),
+              ),
+              Effect.mapError(
+                (cause) =>
+                  new ProviderProjectSkillsError({
+                    driver: DRIVER_KIND,
+                    instanceId,
+                    cwd: projectCwd,
+                    cause,
+                  }),
+              ),
+            ),
+        },
       } satisfies ProviderInstance;
     }),
 };
