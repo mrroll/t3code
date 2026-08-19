@@ -1,4 +1,9 @@
-import type { EnvironmentId, ProviderInteractionMode, ServerProvider } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  ProviderInteractionMode,
+  ServerProvider,
+  ServerProviderSkill,
+} from "@t3tools/contracts";
 import {
   detectComposerTrigger,
   replaceTextRange,
@@ -27,6 +32,7 @@ export function useComposerCommandMenu({
   environmentId,
   projectCwd,
   selectedProviderStatus,
+  selectedProviderSkills,
   hasThread,
   enabled = true,
   onChangeDraftMessage,
@@ -37,6 +43,7 @@ export function useComposerCommandMenu({
   readonly environmentId: EnvironmentId | null;
   readonly projectCwd: string | null;
   readonly selectedProviderStatus: ServerProvider | null;
+  readonly selectedProviderSkills: ReadonlyArray<ServerProviderSkill>;
   readonly hasThread: boolean;
   readonly enabled?: boolean;
   readonly onChangeDraftMessage: (value: string) => void;
@@ -130,7 +137,7 @@ export function useComposerCommandMenu({
         });
       }
 
-      const skillItems = (selectedProviderStatus?.skills ?? [])
+      const skillItems = selectedProviderSkills
         .filter((skill) => matchesSlashSkillQuery(skill, q))
         .map((skill) => ({
           id: `skill:${skill.name}`,
@@ -144,7 +151,7 @@ export function useComposerCommandMenu({
     }
 
     if (trigger.kind === "skill") {
-      const enabledSkills = (selectedProviderStatus?.skills ?? []).filter((skill) => skill.enabled);
+      const enabledSkills = selectedProviderSkills.filter((skill) => skill.enabled);
       const normalizedQuery = normalizeSearchQuery(trigger.query, {
         trimLeadingPattern: /^\$+/,
       });
@@ -241,7 +248,14 @@ export function useComposerCommandMenu({
     }
 
     return [];
-  }, [hasThread, onUpdateInteractionMode, pathSearch.entries, selectedProviderStatus, trigger]);
+  }, [
+    hasThread,
+    onUpdateInteractionMode,
+    pathSearch.entries,
+    selectedProviderSkills,
+    selectedProviderStatus,
+    trigger,
+  ]);
 
   const onSelect = useCallback(
     (item: ComposerCommandItem) => {

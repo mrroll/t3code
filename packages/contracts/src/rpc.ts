@@ -169,6 +169,9 @@ import {
   ServerConfig,
   ServerProviderUpdateError,
   ServerProviderUpdateInput,
+  ServerProviderProjectSkillsError,
+  ServerProviderProjectSkillsInput,
+  ServerProviderProjectSkillsResult,
   ServerLifecycleStreamEvent,
   ServerRemoveKeybindingInput,
   ServerRemoveKeybindingResult,
@@ -216,6 +219,8 @@ export const WS_METHODS = {
   projectsSearchContents: "projects.searchContents",
   projectsSearchEntries: "projects.searchEntries",
   projectsWriteFile: "projects.writeFile",
+
+  providersProjectSkills: "providers.projectSkills",
 
   // Shell methods
   shellOpenInEditor: "shell.openInEditor",
@@ -666,6 +671,12 @@ export const WsProjectsWriteFileRpc = Rpc.make(WS_METHODS.projectsWriteFile, {
   error: Schema.Union([ProjectWriteFileError, EnvironmentAuthorizationError]),
 });
 
+export const WsProvidersProjectSkillsRpc = Rpc.make(WS_METHODS.providersProjectSkills, {
+  payload: ServerProviderProjectSkillsInput,
+  success: ServerProviderProjectSkillsResult,
+  error: Schema.Union([ServerProviderProjectSkillsError, EnvironmentAuthorizationError]),
+});
+
 export const WsShellOpenInEditorRpc = Rpc.make(WS_METHODS.shellOpenInEditor, {
   payload: LaunchEditorInput,
   error: Schema.Union([ExternalLauncherError, EnvironmentAuthorizationError]),
@@ -1075,6 +1086,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsSearchContentsRpc,
   WsProjectsSearchEntriesRpc,
   WsProjectsWriteFileRpc,
+  WsProvidersProjectSkillsRpc,
   WsShellOpenInEditorRpc,
   WsFilesystemBrowseRpc,
   WsAssetsCreateUrlRpc,

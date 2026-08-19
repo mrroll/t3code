@@ -264,6 +264,8 @@ import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../termina
 import { useKnownTerminalSessions, useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { projectEnvironment } from "../state/projects";
 import { useEnvironmentQuery } from "../state/query";
+import type { ProjectProviderSkillsScope } from "@t3tools/client-runtime/state/projects";
+import { useProjectProviderSkills } from "../state/queries";
 import {
   environmentServerConfigsAtom,
   primaryServerAvailableEditorsAtom,
@@ -429,7 +431,6 @@ const ATTACHMENT_ONLY_BOOTSTRAP_PROMPT =
   "[User attached one or more files without additional text. Respond using the conversation context and the attached files.]";
 const EMPTY_ACTIVITIES: OrchestrationThreadActivity[] = [];
 const EMPTY_PROVIDERS: ServerProvider[] = [];
-const EMPTY_PROVIDER_SKILLS: ServerProvider["skills"] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
 function useDraftHeroLayoutTransition(isDraftHeroState: boolean) {
   const transitionGroupRef = useRef<HTMLDivElement | null>(null);
@@ -2833,6 +2834,18 @@ function ChatViewContent(props: ChatViewProps) {
     draftHeroDockRequested,
     backgroundSubmissionPending,
   });
+  const projectProviderSkillsScope: ProjectProviderSkillsScope | null =
+    activeProject === null
+      ? null
+      : isLocalDraftThread
+        ? { kind: "project", projectId: activeProject.id }
+        : routeServerThreadShell === null
+          ? null
+          : {
+              kind: "thread",
+              projectId: activeProject.id,
+              threadId: routeServerThreadShell.id,
+            };
   const [
     attachDraftHeroTransitionGroupRef,
     attachDraftHeroComposerAnchorRef,
@@ -2968,6 +2981,11 @@ function ChatViewContent(props: ChatViewProps) {
     resumeCompactionPermanentlyDismissed,
     setResumeCompactionPermanentlyDismissed,
   ]);
+  const selectedProviderSkills = useProjectProviderSkills({
+    environmentId: activeThread?.environmentId ?? null,
+    providerInstanceId: activeProviderStatus?.instanceId ?? null,
+    scope: projectProviderSkillsScope,
+  });
   const providerStatusBannerKey = getProviderStatusBannerKey(activeProviderStatus);
   const [dismissedProviderStatusBannerKey, setDismissedProviderStatusBannerKey] = useState<
     string | null
@@ -7245,7 +7263,7 @@ function ChatViewContent(props: ChatViewProps) {
                 resolvedTheme={resolvedTheme}
                 timestampFormat={timestampFormat}
                 workspaceRoot={activeWorkspaceRoot}
-                skills={activeProviderStatus?.skills ?? EMPTY_PROVIDER_SKILLS}
+                skills={selectedProviderSkills}
                 anchorMessageId={timelineAnchorMessageId}
                 onAnchorReady={onTimelineAnchorReady}
                 contentInsetEndAdjustment={composerOverlayHeight}
@@ -7333,10 +7351,9 @@ function ChatViewContent(props: ChatViewProps) {
                             routeThreadRef={routeThreadRef}
                             draftId={draftId}
                             activeThreadId={activeThreadId}
+                            selectedProviderSkills={selectedProviderSkills}
                             activeThreadEnvironmentId={activeThread?.environmentId}
                             activeThread={activeThread}
-                            isServerThread={isServerThread}
-                            isLocalDraftThread={isLocalDraftThread}
                             forceExpandedOnMobile={forceExpandedMobileComposer && isDraftHeroState}
                             projectSelectionRequired={isLocalDraftThread && activeProject === null}
                             phase={phase}

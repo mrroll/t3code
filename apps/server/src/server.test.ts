@@ -18,6 +18,7 @@ import {
   MessageId,
   ExternalLauncherCommandNotFoundError,
   OrchestrationThreadDetailSnapshot,
+  type OrchestrationProjectShell,
   type OrchestrationThreadStreamItem,
   type OrchestrationThreadShell,
   TerminalNotRunningError,
@@ -277,6 +278,22 @@ const makeDefaultOrchestrationThreadShell = (
     hasPendingApprovals: false,
     hasPendingUserInput: false,
     hasActionableProposedPlan: false,
+    ...overrides,
+  };
+};
+
+const makeDefaultOrchestrationProjectShell = (
+  overrides: Partial<OrchestrationProjectShell> = {},
+): OrchestrationProjectShell => {
+  const now = "2026-01-01T00:00:00.000Z";
+  return {
+    id: defaultProjectId,
+    title: "Default Project",
+    workspaceRoot: "/tmp/default-project",
+    defaultModelSelection,
+    scripts: [],
+    createdAt: now,
+    updatedAt: now,
     ...overrides,
   };
 };
@@ -654,6 +671,7 @@ const buildAppUnderTest = (options?: {
             getProviders: Effect.succeed([]),
             refresh: () => Effect.succeed([]),
             refreshInstance: () => Effect.succeed([]),
+            listProjectSkills: () => Effect.succeed({ skills: [] }),
             getProviderMaintenanceCapabilitiesForInstance: (_instanceId, provider) =>
               Effect.succeed(
                 makeManualOnlyProviderMaintenanceCapabilities({ provider, packageName: null }),
@@ -5460,6 +5478,79 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(response.relativePath, "nested/created.txt");
       const persisted = yield* fs.readFileString(path.join(workspaceDir, "nested", "created.txt"));
       assert.equal(persisted, "written-by-rpc");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("derives provider skill paths from the selected project and thread", () =>
+    Effect.gen(function* () {
+      const worktreePath = "/tmp/default-project-worktree";
+      const mismatchedThreadId = ThreadId.make("thread-other-project");
+      const requestedCwds: Array<string> = [];
+
+      yield* buildAppUnderTest({
+        layers: {
+          projectionSnapshotQuery: {
+            getProjectShellById: (projectId) =>
+              Effect.succeed(
+                projectId === defaultProjectId
+                  ? Option.some(makeDefaultOrchestrationProjectShell())
+                  : Option.none(),
+              ),
+            getThreadShellById: (threadId) =>
+              Effect.succeed(
+                Option.some(
+                  makeDefaultOrchestrationThreadShell({
+                    id: threadId,
+                    projectId:
+                      threadId === mismatchedThreadId
+                        ? ProjectId.make("project-other")
+                        : defaultProjectId,
+                    worktreePath,
+                  }),
+                ),
+              ),
+          },
+          providerRegistry: {
+            listProjectSkills: (input) =>
+              Effect.sync(() => {
+                requestedCwds.push(input.cwd);
+                return {
+                  skills: [],
+                };
+              }),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const results = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          Effect.all([
+            client[WS_METHODS.providersProjectSkills]({
+              providerInstanceId: ProviderInstanceId.make("codex"),
+              projectId: defaultProjectId,
+            }),
+            client[WS_METHODS.providersProjectSkills]({
+              providerInstanceId: ProviderInstanceId.make("codex"),
+              projectId: defaultProjectId,
+              threadId: defaultThreadId,
+            }),
+            client[WS_METHODS.providersProjectSkills]({
+              providerInstanceId: ProviderInstanceId.make("codex"),
+              projectId: defaultProjectId,
+              threadId: mismatchedThreadId,
+            }).pipe(Effect.result),
+          ]),
+        ),
+      );
+
+      assert.deepEqual(results[0].skills, []);
+      assert.deepEqual(results[1].skills, []);
+      assert.deepEqual(requestedCwds, ["/tmp/default-project", worktreePath]);
+      assert.equal(results[2]._tag, "Failure");
+      if (results[2]._tag === "Failure") {
+        assert.equal(results[2].failure._tag, "ServerProviderProjectSkillsError");
+      }
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
