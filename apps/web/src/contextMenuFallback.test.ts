@@ -27,6 +27,7 @@ class FakeElement {
   attributes = new Map<string, string>();
   className = "";
   disabled = false;
+  focused = false;
   type = "";
   private textValue = "";
   private readonly listeners = new Map<string, FakeListener[]>();
@@ -65,6 +66,10 @@ class FakeElement {
       listener(event);
     }
     return true;
+  }
+
+  focus() {
+    this.focused = true;
   }
 
   set textContent(value: string) {
@@ -254,6 +259,30 @@ describe("showContextMenuFallback", () => {
     childButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
     await expect(selectionPromise).resolves.toBe("rename:project-b");
+  });
+
+  it("opens and focuses nested submenus when the parent is activated", async () => {
+    const selectionPromise = showContextMenuFallback([
+      {
+        id: "copy:submenu",
+        label: "Copy",
+        children: [
+          { id: "copy:path", label: "Path" },
+          { id: "copy:branch", label: "Branch" },
+        ],
+      },
+    ]);
+
+    const parentButton = findButton("Copy");
+    expect(parentButton).toBeTruthy();
+    parentButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    const childButton = findButton("Path");
+    expect(childButton).toBeTruthy();
+    expect(childButton?.focused).toBe(true);
+    childButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    await expect(selectionPromise).resolves.toBe("copy:path");
   });
 });
 

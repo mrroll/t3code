@@ -365,7 +365,7 @@ export function showContextMenuFallback<T extends string>(
           });
 
           if (hasChildren) {
-            button.addEventListener("mouseenter", () => {
+            const openSubmenu = (focusFirstItem = false) => {
               const rect = button.getBoundingClientRect();
               const nextLeft = rect.right + 4;
               const nextTop = rect.top;
@@ -379,9 +379,18 @@ export function showContextMenuFallback<T extends string>(
               if (childRect.right > window.innerWidth) {
                 clampMenuPosition(childMenu, rect.left - childRect.width - 4, rect.top);
               }
+              if (focusFirstItem) {
+                [...childMenu.querySelectorAll<HTMLButtonElement>("button")]
+                  .find((childButton) => !childButton.disabled)
+                  ?.focus();
+              }
+            };
+            button.addEventListener("mouseenter", () => {
+              openSubmenu();
             });
             button.addEventListener("click", (event) => {
               event.preventDefault();
+              openSubmenu(true);
             });
           } else {
             button.addEventListener("mouseenter", () => {
