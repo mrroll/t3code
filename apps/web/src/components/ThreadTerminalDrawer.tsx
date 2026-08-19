@@ -81,6 +81,7 @@ import {
   TYPOGRAPHY_ADVANCED_STORAGE_KEY,
 } from "../appearanceFonts";
 import { RightPanelResizeHandle } from "./preview/RightPanelResizeHandle";
+import { Separator } from "./ui/separator";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
 const MIN_DRAWER_HEIGHT = 180;
@@ -1590,7 +1591,7 @@ export default function ThreadTerminalDrawer({
       </TerminalToolbarAction>
       {!isPanel && onHide ? (
         <>
-          <span aria-hidden className="mx-0.5 h-4 w-px bg-border/70" />
+          <Separator orientation="vertical" className="mx-0.5 h-4" />
           <TerminalToolbarAction label={hideTerminalActionLabel} onClick={onHide}>
             <PanelBottomCloseIcon className="size-3.5" />
           </TerminalToolbarAction>
@@ -1812,6 +1813,14 @@ export default function ThreadTerminalDrawer({
                                     onClick={() => onActiveTerminalChange(terminalId)}
                                     onDoubleClick={(event) => {
                                       event.preventDefault();
+                                      onActiveTerminalChange(terminalId);
+                                      startTerminalRename(terminalId);
+                                    }}
+                                    onKeyDown={(event) => {
+                                      if (event.nativeEvent.isComposing || event.key !== "F2")
+                                        return;
+                                      event.preventDefault();
+                                      event.stopPropagation();
                                       onActiveTerminalChange(terminalId);
                                       startTerminalRename(terminalId);
                                     }}
