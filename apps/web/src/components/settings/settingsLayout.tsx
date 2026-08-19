@@ -12,9 +12,16 @@ import {
 } from "react";
 
 import { cn } from "../../lib/utils";
-import { WorkspacePageContainer, type WorkspacePageWidth } from "../WorkspacePageContainer";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+
+type SettingsPageWidth = "readable" | "wide" | "expanded";
+
+const SETTINGS_PAGE_WIDTH_CLASS: Record<SettingsPageWidth, string> = {
+  readable: "max-w-4xl",
+  wide: "max-w-5xl",
+  expanded: "max-w-6xl",
+};
 
 interface SettingsSearchTargetContextValue {
   readonly targetId: string | null;
@@ -238,7 +245,7 @@ export function SettingsPageContainer({
 }: {
   children: ReactNode;
   className?: string;
-  width?: WorkspacePageWidth;
+  width?: SettingsPageWidth;
 }) {
   const navigate = useNavigate();
   const hash = useLocation({ select: (location) => location.hash });
@@ -253,9 +260,15 @@ export function SettingsPageContainer({
         className="topbar-scroll-fade scrollbar-gutter-both flex-1 overflow-y-auto [--topbar-scroll-fade-height:1.5rem] sm:[--topbar-scroll-fade-height:1.5rem]"
         data-settings-page-scroll
       >
-        <WorkspacePageContainer width={width} className={cn("gap-12", className)}>
+        <div
+          className={cn(
+            "mx-auto flex w-full flex-col gap-12 px-5 pt-6 pb-12 sm:px-6",
+            SETTINGS_PAGE_WIDTH_CLASS[width],
+            className,
+          )}
+        >
           {children}
-        </WorkspacePageContainer>
+        </div>
       </div>
     </SettingsSearchTargetProvider>
   );

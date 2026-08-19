@@ -3,33 +3,7 @@ import type { ComponentPropsWithoutRef } from "react";
 import { cn } from "../lib/utils";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../workspaceTitlebar";
 
-export type WorkspacePageWidth = "readable" | "wide" | "expanded";
-
-const WIDTH_CLASS: Record<WorkspacePageWidth, string> = {
-  readable: "max-w-4xl",
-  wide: "max-w-5xl",
-  expanded: "max-w-6xl",
-};
-
-/** Shared full-page frame for workspace routes beneath their top bar. */
-export function WorkspacePageContainer({
-  width = "readable",
-  className,
-  ...props
-}: ComponentPropsWithoutRef<"div"> & { readonly width?: WorkspacePageWidth }) {
-  return (
-    <div
-      className={cn(
-        "mx-auto flex w-full flex-col gap-6 px-5 pt-6 pb-12 sm:px-6",
-        WIDTH_CLASS[width],
-        className,
-      )}
-      {...props}
-    />
-  );
-}
-
-/** Shared top-bar geometry for every full-width workspace surface. */
+/** Shared workspace top-bar geometry. */
 export function WorkspacePageHeader({
   electron = false,
   reserveNativeControls = electron,
