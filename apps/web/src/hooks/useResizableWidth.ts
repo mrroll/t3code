@@ -67,14 +67,10 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
   } | null>(null);
 
   useEffect(() => {
-    if (
-      dragStateRef.current === null &&
-      dragWidth !== null &&
-      clamp(storedWidth) === clamp(dragWidth)
-    ) {
+    if (dragStateRef.current === null && dragWidth !== null) {
       setDragWidth(null);
     }
-  }, [clamp, dragWidth, storedWidth]);
+  }, [dragWidth, storedWidth]);
 
   const releasePointer = useCallback((pointerId: number) => {
     const state = dragStateRef.current;
