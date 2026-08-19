@@ -802,7 +802,7 @@ export const useTerminalUiStateStore = create<TerminalUiStateStoreState>()(
             };
           }),
         closeTerminal: (threadRef, terminalId) =>
-          updateTerminal(threadRef, (state) => closeThreadTerminal(state, terminalId), {
+          updateTerminal(threadRef, (state) => closeThreadTerminal(state, terminalId.trim()), {
             terminalId,
             suppressed: true,
             clearCustomLabel: true,

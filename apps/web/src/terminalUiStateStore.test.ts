@@ -280,6 +280,26 @@ describe("terminalUiStateStore actions", () => {
     ).toEqual({});
   });
 
+  it("normalizes terminal ids when closing", () => {
+    const store = useTerminalUiStateStore.getState();
+    store.newTerminal(THREAD_REF, "terminal-only");
+    store.setTerminalCustomLabel(THREAD_REF, "terminal-only", "Build");
+    store.closeTerminal(THREAD_REF, " terminal-only ");
+
+    expect(
+      selectThreadTerminalUiState(
+        useTerminalUiStateStore.getState().terminalUiStateByThreadKey,
+        THREAD_REF,
+      ).terminalIds,
+    ).toEqual([]);
+    expect(
+      selectThreadTerminalCustomLabels(
+        useTerminalUiStateStore.getState().terminalCustomLabelsByThreadKey,
+        THREAD_REF,
+      ),
+    ).toEqual({});
+  });
+
   it("keeps a valid active terminal after closing an active split terminal", () => {
     const store = useTerminalUiStateStore.getState();
     store.splitTerminal(THREAD_REF, "terminal-2");
