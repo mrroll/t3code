@@ -363,6 +363,41 @@ function toolGroupSummaryEntries(
   return terminalEntries.length > 0 ? terminalEntries : entries;
 }
 
+function omitSupersededLiveLifecycleMarkers<T extends { entry: WorkLogEntry }>(
+  entries: readonly T[],
+): T[] {
+  const laterTerminalIdentities = new Set<string>();
+  const reversedEntries: T[] = [];
+
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]!;
+    const workEntry = entry.entry;
+    const normalizedLabel = normalizeCompactToolLabel(workEntry.toolTitle ?? workEntry.label);
+    const identity = [
+      workEntry.turnId ?? "no-turn",
+      workEntry.itemType ?? "",
+      normalizedLabel,
+    ].join("\u001f");
+    const isStatuslessIdlessMarker =
+      workEntry.toolCallId === undefined &&
+      workEntry.toolLifecycleStatus === undefined &&
+      (workEntry.sourceActivityKind === "tool.started" ||
+        workEntry.sourceActivityKind === "tool.updated");
+    if (isStatuslessIdlessMarker && laterTerminalIdentities.has(identity)) continue;
+
+    reversedEntries.push(entry);
+    if (
+      workEntry.sourceActivityKind === "tool.completed" ||
+      (workEntry.toolLifecycleStatus !== undefined &&
+        workEntry.toolLifecycleStatus !== "inProgress")
+    ) {
+      laterTerminalIdentities.add(identity);
+    }
+  }
+
+  return reversedEntries.toReversed();
+}
+
 function toolGroupSummaryKind(entries: ReadonlyArray<WorkLogEntry>): ToolGroupSummaryKind {
   const summaryEntries = toolGroupSummaryEntries(entries);
   const actions = new Set(summaryEntries.map(toolGroupAction));
@@ -731,8 +766,8 @@ export function deriveMessagesTimelineRows(input: {
       : [],
   );
   const activeWorkEntryIds = new Set(activeToolEntries.map((entry) => entry.id));
-  const visibleActiveToolEntries = activeToolEntries.filter((entry) =>
-    isVisibleActiveToolEntry(entry.entry),
+  const visibleActiveToolEntries = omitSupersededLiveLifecycleMarkers(
+    activeToolEntries.filter((entry) => isVisibleActiveToolEntry(entry.entry)),
   );
   const activeWorkAnchor = activeToolEntries[0];
   const latestActiveToolEntry = visibleActiveToolEntries.at(-1);
@@ -824,9 +859,11 @@ export function deriveMessagesTimelineRows(input: {
         groupedEntries.push(nextEntry.entry);
         cursor += 1;
       }
-      const visibleGroupedEntries = groupedEntries.filter(
-        (entry) => !workEntryIndicatesToolNeutralStatus(entry),
-      );
+      const visibleGroupedEntries = [
+        ...toolGroupSummaryEntries(
+          groupedEntries.filter((entry) => !workEntryIndicatesToolNeutralStatus(entry)),
+        ),
+      ];
       if (visibleGroupedEntries.length > 0) {
         const onlyToolEntries = visibleGroupedEntries.every(
           (entry) =>
@@ -837,31 +874,30 @@ export function deriveMessagesTimelineRows(input: {
         if (onlyToolEntries) {
           const groupId = workGroupId(timelineEntry.id, timelineEntry.entry);
           const expanded = input.expandedWorkGroupIds?.has(groupId) ?? false;
-          const toolGroupEntries = toolGroupSummaryEntries(visibleGroupedEntries);
-          const summaryKind = toolGroupSummaryKind(toolGroupEntries);
+          const summaryKind = toolGroupSummaryKind(visibleGroupedEntries);
           nextRows.push({
             kind: "work-toggle",
             id: `work-toggle:${timelineEntry.id}`,
             createdAt: timelineEntry.createdAt,
             groupId,
-            hiddenCount: toolGroupEntries.length,
+            hiddenCount: visibleGroupedEntries.length,
             expanded,
             onlyToolEntries: true,
-            summary: summarizeToolGroup(toolGroupEntries),
+            summary: summarizeToolGroup(visibleGroupedEntries),
             summaryKind,
-            hasFailure: toolGroupEntries.some((entry) =>
+            hasFailure: visibleGroupedEntries.some((entry) =>
               workEntryDisplayIndicatesToolFailure(entry),
             ),
           });
           if (expanded) {
-            for (const [entryIndex, workEntry] of toolGroupEntries.entries()) {
+            for (const [entryIndex, workEntry] of visibleGroupedEntries.entries()) {
               nextRows.push({
                 kind: "work",
                 id: workEntry.id,
                 createdAt: workEntry.createdAt,
                 groupedEntries: [workEntry],
                 isExpandedToolGroupEntry: true,
-                isLastExpandedToolGroupEntry: entryIndex === toolGroupEntries.length - 1,
+                isLastExpandedToolGroupEntry: entryIndex === visibleGroupedEntries.length - 1,
               });
             }
           }
