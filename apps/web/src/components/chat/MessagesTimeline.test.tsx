@@ -818,6 +818,7 @@ describe("MessagesTimeline", () => {
     ['"C:\\Program Files\\nodejs\\node.exe" script.js', "Running node.exe"],
     ["env -S 'python -O'", "Running python"],
     ["env --split-string='python -O'", "Running python"],
+    ["env -v npm test", "Running npm"],
     ["sudo FOO=bar npm test", "Running npm"],
     ["sudo --user=root npm test", "Running npm"],
     ["sudo --bogus=value npm test", "Running command"],

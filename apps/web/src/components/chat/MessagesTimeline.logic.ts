@@ -364,14 +364,15 @@ function toolGroupSummaryEntries(
 }
 
 function toolGroupSummaryKind(entries: ReadonlyArray<WorkLogEntry>): ToolGroupSummaryKind {
-  const actions = new Set(toolGroupSummaryEntries(entries).map(toolGroupAction));
+  const summaryEntries = toolGroupSummaryEntries(entries);
+  const actions = new Set(summaryEntries.map(toolGroupAction));
   if (actions.size !== 1) return "mixed";
 
   const action = actions.values().next().value!;
   if (action !== "other") return action;
 
   const fallbackKinds = new Set(
-    entries.map((entry): ToolGroupSummaryKind => {
+    summaryEntries.map((entry): ToolGroupSummaryKind => {
       if (entry.itemType === "mcp_tool_call") return "other";
       if (entry.itemType === "dynamic_tool_call") return "dynamic-tool";
       if (entry.itemType === "collab_agent_tool_call" || entry.taskId) return "agent-tool";
@@ -836,30 +837,31 @@ export function deriveMessagesTimelineRows(input: {
         if (onlyToolEntries) {
           const groupId = workGroupId(timelineEntry.id, timelineEntry.entry);
           const expanded = input.expandedWorkGroupIds?.has(groupId) ?? false;
-          const summaryKind = toolGroupSummaryKind(visibleGroupedEntries);
+          const toolGroupEntries = toolGroupSummaryEntries(visibleGroupedEntries);
+          const summaryKind = toolGroupSummaryKind(toolGroupEntries);
           nextRows.push({
             kind: "work-toggle",
             id: `work-toggle:${timelineEntry.id}`,
             createdAt: timelineEntry.createdAt,
             groupId,
-            hiddenCount: visibleGroupedEntries.length,
+            hiddenCount: toolGroupEntries.length,
             expanded,
             onlyToolEntries: true,
-            summary: summarizeToolGroup(visibleGroupedEntries),
+            summary: summarizeToolGroup(toolGroupEntries),
             summaryKind,
-            hasFailure: visibleGroupedEntries.some((entry) =>
+            hasFailure: toolGroupEntries.some((entry) =>
               workEntryDisplayIndicatesToolFailure(entry),
             ),
           });
           if (expanded) {
-            for (const [entryIndex, workEntry] of visibleGroupedEntries.entries()) {
+            for (const [entryIndex, workEntry] of toolGroupEntries.entries()) {
               nextRows.push({
                 kind: "work",
                 id: workEntry.id,
                 createdAt: workEntry.createdAt,
                 groupedEntries: [workEntry],
                 isExpandedToolGroupEntry: true,
-                isLastExpandedToolGroupEntry: entryIndex === visibleGroupedEntries.length - 1,
+                isLastExpandedToolGroupEntry: entryIndex === toolGroupEntries.length - 1,
               });
             }
           }

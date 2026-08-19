@@ -1706,6 +1706,63 @@ describe("deriveMessagesTimelineRows", () => {
     });
   });
 
+  it("uses settled lifecycle entries throughout a tool summary", () => {
+    const input = {
+      timelineEntries: [
+        {
+          id: "legacy-update-entry",
+          kind: "work",
+          createdAt: "2026-01-01T00:00:01Z",
+          entry: {
+            id: "legacy-update",
+            createdAt: "2026-01-01T00:00:01Z",
+            label: "Glob",
+            tone: "tool",
+            itemType: "dynamic_tool_call",
+            sourceActivityKind: "tool.updated",
+          },
+        },
+        {
+          id: "legacy-complete-entry",
+          kind: "work",
+          createdAt: "2026-01-01T00:00:02Z",
+          entry: {
+            id: "legacy-complete",
+            createdAt: "2026-01-01T00:00:02Z",
+            label: "Glob",
+            tone: "tool",
+            itemType: "mcp_tool_call",
+            sourceActivityKind: "tool.completed",
+            toolLifecycleStatus: "completed",
+          },
+        },
+      ],
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    } satisfies Parameters<typeof deriveMessagesTimelineRows>[0];
+
+    const collapsedRows = deriveMessagesTimelineRows(input);
+    const expandedRows = deriveMessagesTimelineRows({
+      ...input,
+      expandedWorkGroupIds: new Set(["work-group:legacy-update-entry"]),
+    });
+
+    expect(collapsedRows).toHaveLength(1);
+    expect(collapsedRows[0]).toMatchObject({
+      kind: "work-toggle",
+      hiddenCount: 1,
+      summary: "Used 1 tool",
+      summaryKind: "other",
+      hasFailure: false,
+    });
+    expect(expandedRows.map((row) => row.id)).toEqual([
+      "work-toggle:legacy-update-entry",
+      "legacy-complete",
+    ]);
+  });
+
   it("labels mixed-group overflow from the entries actually hidden", () => {
     const input = {
       timelineEntries: [
