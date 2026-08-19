@@ -528,6 +528,15 @@ export function selectThreadTerminalCustomLabels(
   );
 }
 
+export function getTerminalCustomLabel(
+  terminalCustomLabels: Readonly<Record<string, string>>,
+  terminalId: string,
+): string | undefined {
+  return Object.prototype.hasOwnProperty.call(terminalCustomLabels, terminalId)
+    ? terminalCustomLabels[terminalId]
+    : undefined;
+}
+
 function updateTerminalUiStateByThreadKey(
   terminalUiStateByThreadKey: Record<string, ThreadTerminalUiState>,
   threadRef: ScopedThreadRef,
@@ -668,7 +677,8 @@ export const useTerminalUiStateStore = create<TerminalUiStateStoreState>()(
             : "";
           const currentLabels = state.terminalCustomLabelsByThreadKey[threadKey] ?? {};
           let nextTerminalCustomLabelsByThreadKey =
-            terminalIdToClear.length > 0 && currentLabels[terminalIdToClear] !== undefined
+            terminalIdToClear.length > 0 &&
+            getTerminalCustomLabel(currentLabels, terminalIdToClear) !== undefined
               ? Object.keys(currentLabels).length === 1
                 ? removeRecordEntry(state.terminalCustomLabelsByThreadKey, threadKey)
                 : {
@@ -781,7 +791,9 @@ export const useTerminalUiStateStore = create<TerminalUiStateStoreState>()(
             const currentLabels = state.terminalCustomLabelsByThreadKey[threadKey] ?? {};
             const normalizedLabel = label?.trim().slice(0, 80) ?? "";
             if (normalizedLabel.length > 0) {
-              if (currentLabels[normalizedTerminalId] === normalizedLabel) return state;
+              if (getTerminalCustomLabel(currentLabels, normalizedTerminalId) === normalizedLabel) {
+                return state;
+              }
               return {
                 terminalCustomLabelsByThreadKey: {
                   ...state.terminalCustomLabelsByThreadKey,
@@ -789,7 +801,9 @@ export const useTerminalUiStateStore = create<TerminalUiStateStoreState>()(
                 },
               };
             }
-            if (currentLabels[normalizedTerminalId] === undefined) return state;
+            if (getTerminalCustomLabel(currentLabels, normalizedTerminalId) === undefined) {
+              return state;
+            }
             const { [normalizedTerminalId]: _removed, ...remainingLabels } = currentLabels;
             return {
               terminalCustomLabelsByThreadKey:

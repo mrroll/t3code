@@ -3,6 +3,7 @@ import { ThreadId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
 import {
+  getTerminalCustomLabel,
   migratePersistedTerminalUiStateStoreState,
   selectThreadTerminalCustomLabels,
   selectThreadTerminalUiState,
@@ -255,6 +256,40 @@ describe("terminalUiStateStore actions", () => {
         THREAD_REF,
       ),
     ).toEqual({});
+  });
+
+  it("treats prototype keys as terminal ids only when explicitly labeled", () => {
+    const store = useTerminalUiStateStore.getState();
+    store.setTerminalCustomLabel(THREAD_REF, "term-1", "API server");
+
+    let labels = selectThreadTerminalCustomLabels(
+      useTerminalUiStateStore.getState().terminalCustomLabelsByThreadKey,
+      THREAD_REF,
+    );
+    expect(getTerminalCustomLabel(labels, "toString")).toBeUndefined();
+
+    store.setTerminalCustomLabel(THREAD_REF, "toString", null);
+    expect(
+      selectThreadTerminalCustomLabels(
+        useTerminalUiStateStore.getState().terminalCustomLabelsByThreadKey,
+        THREAD_REF,
+      ),
+    ).toEqual({ "term-1": "API server" });
+
+    store.setTerminalCustomLabel(THREAD_REF, "toString", "Shell");
+    labels = selectThreadTerminalCustomLabels(
+      useTerminalUiStateStore.getState().terminalCustomLabelsByThreadKey,
+      THREAD_REF,
+    );
+    expect(getTerminalCustomLabel(labels, "toString")).toBe("Shell");
+
+    store.setTerminalCustomLabel(THREAD_REF, "toString", null);
+    expect(
+      selectThreadTerminalCustomLabels(
+        useTerminalUiStateStore.getState().terminalCustomLabelsByThreadKey,
+        THREAD_REF,
+      ),
+    ).toEqual({ "term-1": "API server" });
   });
 
   it("resets to default and clears persisted entry when closing the last terminal", () => {

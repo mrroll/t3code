@@ -63,7 +63,11 @@ import {
 import { readLocalApi } from "~/localApi";
 import { useClientSettings } from "../hooks/useSettings";
 import { useLocalStorage } from "../hooks/useLocalStorage";
-import { selectThreadTerminalCustomLabels, useTerminalUiStateStore } from "../terminalUiStateStore";
+import {
+  getTerminalCustomLabel,
+  selectThreadTerminalCustomLabels,
+  useTerminalUiStateStore,
+} from "../terminalUiStateStore";
 import { useAttachedTerminalSession } from "../state/terminalSessions";
 import { serverEnvironment } from "../state/server";
 import { previewEnvironment } from "../state/preview";
@@ -1310,7 +1314,7 @@ export default function ThreadTerminalDrawer({
     for (const terminalId of normalizedTerminalIds) {
       next.set(
         terminalId,
-        terminalCustomLabels[terminalId]?.trim() ||
+        getTerminalCustomLabel(terminalCustomLabels, terminalId)?.trim() ||
           automaticTerminalLabelById.get(terminalId) ||
           getTerminalLabel(terminalId),
       );
@@ -1361,10 +1365,13 @@ export default function ThreadTerminalDrawer({
     (terminalId: string) => {
       cancelTerminalRenameRef.current = false;
       terminalRenameAutomaticLabelRef.current = automaticTerminalLabelById.get(terminalId) ?? "";
-      terminalRenameCustomLabelRef.current = terminalCustomLabels[terminalId] ?? null;
+      terminalRenameCustomLabelRef.current =
+        getTerminalCustomLabel(terminalCustomLabels, terminalId) ?? null;
       setRenamingTerminalId(terminalId);
       setTerminalRenameDraft(
-        terminalCustomLabels[terminalId] ?? terminalLabelById.get(terminalId) ?? "",
+        getTerminalCustomLabel(terminalCustomLabels, terminalId) ??
+          terminalLabelById.get(terminalId) ??
+          "",
       );
     },
     [automaticTerminalLabelById, terminalCustomLabels, terminalLabelById],
@@ -1741,7 +1748,8 @@ export default function ThreadTerminalDrawer({
                       const isActive = terminalId === resolvedActiveTerminalId;
                       const automaticLabel =
                         automaticTerminalLabelById.get(terminalId) ?? "Terminal";
-                      const customLabel = terminalCustomLabels[terminalId]?.trim() ?? "";
+                      const customLabel =
+                        getTerminalCustomLabel(terminalCustomLabels, terminalId)?.trim() ?? "";
                       const displayLabel = terminalLabelById.get(terminalId) ?? automaticLabel;
                       const isRenaming = renamingTerminalId === terminalId;
                       const terminalTabTooltipLabel = `${displayLabel}${customLabel && customLabel !== automaticLabel ? ` · ${automaticLabel}` : ""} — ${resolveTerminalLaunchLocation(terminalId).cwd}`;
