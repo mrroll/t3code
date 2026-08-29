@@ -5,6 +5,9 @@ packages:
   - packages/*
   - scripts
 
+# Stable-release branch builds use the exact dependency graph from the release lockfile.
+minimumReleaseAge: 0
+
 # Successor to onlyBuiltDependencies/ignoredBuiltDependencies (pnpm 11).
 # true = allowed to run build scripts; false mirrors the pnpm 10 behavior
 # where anything outside onlyBuiltDependencies was silently not built.
